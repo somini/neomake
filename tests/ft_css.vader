@@ -19,3 +19,68 @@ Execute (csslint: errorformat):
   \  'nr': -1, 'type': 'W', 'pattern': '',
   \  'text': 'You have 2 h1s, 3 h2s defined in this stylesheet. (unique-headings)'''}]
   bwipe
+
+Execute (stylelint):
+  let bufname1 = tempname()
+  let bufname2 = tempname()
+  call writefile([], bufname1)
+  call writefile([], bufname2)
+
+  let output = join([
+    \ bufname1,
+    \ '  6:5   ✖  Expected indentation of 1 tab     indentation           ',
+    \ '  7:9   ✖  Expected indentation of 2 tabs    indentation           ',
+    \ '',
+    \ bufname2,
+    \ ' 45:2   ✖  Expected empty line before rule   rule-empty-line-before',
+    \ '',
+    \ '/doesnotexist',
+    \ ' 26:36  ✖  Unexpected unit "px"              unit-whitelist        ',
+    \ ], "\n")
+
+  let maker = neomake#makers#ft#css#stylelint()
+  Save &errorformat
+  let &errorformat = maker.errorformat
+  lgetexpr output
+
+  let loclist = getloclist(0)
+  let buf1 = bufnr(bufname1)
+  let buf2 = bufnr(bufname2)
+  AssertEqual loclist[0],
+  \ {'lnum': 6, 'bufnr': buf1, 'col': 5, 'valid': 1, 'vcol': 0, 'nr': -1,
+  \  'type': 'W', 'pattern': '',
+  \  'text': 'Expected indentation of 1 tab     indentation           '}
+  AssertEqual loclist[1],
+  \ {'lnum': 7, 'bufnr': buf1, 'col': 9, 'valid': 1, 'vcol': 0, 'nr': -1,
+  \  'type': 'W', 'pattern': '',
+  \  'text': 'Expected indentation of 2 tabs    indentation           '}
+  AssertEqual loclist[2],
+  \ {'lnum': 45, 'bufnr': 6, 'col': 2, 'valid': 1, 'vcol': 0, 'nr': -1,
+  \  'type': 'W', 'pattern': '',
+  \  'text': 'Expected empty line before rule   rule-empty-line-before'}
+
+  " Keeps non-existing filenames and entries (without bufnr).
+  " https://github.com/vim/vim/issues/2334
+  AssertEqual loclist[3],
+  \ {'lnum': 0, 'bufnr': 0, 'col': 0, 'valid': 0, 'vcol': 0, 'nr': -1,
+  \  'type': '', 'pattern': '', 'text': '/doesnotexist'}
+  AssertEqual loclist[4],
+  \ {'lnum': 26, 'bufnr': 0, 'col': 36, 'valid': 1, 'vcol': 0, 'nr': -1,
+  \  'type': 'W', 'pattern': '',
+  \  'text': 'Unexpected unit "px"              unit-whitelist        '}
+
+  AssertEqual len(loclist), 5
+
+  for e in loclist
+    call maker.postprocess(e)
+  endfor
+  AssertEqual map(loclist, '[v:val.valid, v:val.text]'), [
+  \ [1, 'Expected indentation of 1 tab [indentation]'],
+  \ [1, 'Expected indentation of 2 tabs [indentation]'],
+  \ [1, 'Expected empty line before rule [rule-empty-line-before]'],
+  \ [0, '/doesnotexist'],
+  \ [1, 'Unexpected unit "px" [unit-whitelist]']
+  \ ]
+
+  exe buf1 'bwipe'
+  exe buf2 'bwipe'
